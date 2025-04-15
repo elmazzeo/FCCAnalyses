@@ -32,12 +32,14 @@ class Analysis():
             # # If you want to process only part of the events, split the output into chunks or give a different name to the output use the optional arguments
             # # or leave blank to use defaults = run the full statistics in one output file named the same as the process:
             # ttH(yy) signal
-            'mgp8_pp_tth01j_5f_84TeV_haaexcl' : {'chunks': 100},
+            #'mgp8_pp_tth01j_5f_84TeV_haaexcl' : {'chunks': 100}, # ttH->yy at 84 TeV
+            #'mgp8_pp_tth01j_5f_haa' : {'chunks': 100}, # ttH->yy at 100 TeV
             # Backgrounds 
-           # 'mgp8_pp_ttaa01j_5f_84TeV': {'chunks':100}, #ttyy+jets
-           # 'mgp8_pp_Vaajj_HF_5f_84TeV' : {'chunks': 100}, #V+yy+bb/cc
+            'mgp8_pp_ttaa01j_5f_84TeV': {'chunks':100}, #ttyy+jets at 84 TeV
+            #'mgp8_pp_ttaa_semilep_5f_100TeV': {'chunks':5}, #ttyy semilep at 100 TeV 
+            #'mgp8_pp_Vaajj_HF_5f_84TeV' : {'chunks': 100}, #V+yy+bb/cc at 84 TeV
             # HH->bbyy test
-           # 'pwp8_pp_hh_lambda100_5f_hhbbaa' : {'chunks': 100},
+            #'pwp8_pp_hh_lambda100_5f_hhbbaa' : {'chunks': 100},
         }
 
         # Mandatory: Input directory where to find the samples, or a production tag when running over the centrally produced
@@ -46,7 +48,7 @@ class Analysis():
         #self.input_dir =  '/eos/user/b/bistapf/FCChh_sample_testers/'
 
         # Optional: output directory, default is local running directory
-        self.output_dir = '/eos/user/e/elmazzeo/ttH@FCC-hh/results/2025-03-10' + '/ntuples/'
+        self.output_dir = '/eos/user/e/elmazzeo/ttH@FCC-hh/results/2025-03-21' + '/ntuples/'
 
         # Optional: analysisName, default is ''
         self.analysis_name = 'FCC-hh ttH(yy) analysis'
