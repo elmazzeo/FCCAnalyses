@@ -1653,6 +1653,81 @@ AnalysisFCChh::SortParticleCollection(
     return temp1;
   }
 }
+
+ROOT::VecOps::RVec<int>
+AnalysisFCChh::SortJetsByBTaggingScore(
+    ROOT::VecOps::RVec<edm4hep::ReconstructedParticleData> all_jets,
+    ROOT::VecOps::RVec<int> sel_jets_idx, 
+    ROOT::VecOps::RVec<edm4hep::ParticleIDData> all_jets_tags,
+    ROOT::VecOps::RVec<podio::ObjectID> all_jets_tags_indices,
+    ROOT::VecOps::RVec<float> all_jets_tags_values) {
+
+    if (sel_jets_idx.size() < 2) {
+        return sel_jets_idx;
+    } else {
+    // get the indices of the jets passing the three b-tagging requirements
+    // indices 0 to 2 are for loose, medium and tight b-tagging
+    ROOT::VecOps::RVec<bool> sel_jets_pass_loose = get_pass_tag(all_jets, sel_jets_idx, all_jets_tags, all_jets_tags_indices, all_jets_tags_values, 0);
+    ROOT::VecOps::RVec<bool> sel_jets_pass_medium = get_pass_tag(all_jets, sel_jets_idx, all_jets_tags, all_jets_tags_indices, all_jets_tags_values, 1);
+    ROOT::VecOps::RVec<bool> sel_jets_pass_tight = get_pass_tag(all_jets, sel_jets_idx, all_jets_tags, all_jets_tags_indices, all_jets_tags_values, 2);
+    ROOT::VecOps::RVec<int> sel_jets_btag_score = get_btagging_score(sel_jets_pass_loose, sel_jets_pass_medium, sel_jets_pass_tight);
+
+    // create auxiliary vector with indices
+    std::vector <int> temp(sel_jets_idx.size());
+    std::iota(temp.begin(), temp.end(), 0);
+    // sort this auxiliary vector by the b-tag score of the jet
+    auto sort_by_btag_score = [&](int i, int j) {
+      return (sel_jets_btag_score.at(i) > sel_jets_btag_score.at(j));
+    };
+
+    std::sort(temp.begin(), temp.end(), sort_by_btag_score);
+    // refill the original index array with the sorted indices
+    std::vector <int> temp1(sel_jets_idx.size());
+    temp1.resize(sel_jets_idx.size());
+    for (size_t i = 0; i < temp.size(); i++) {
+      temp1.at(i) = sel_jets_idx.at(temp.at(i));
+    }
+    return temp1;
+  }
+}
+
+ROOT::VecOps::RVec<edm4hep::ReconstructedParticleData>
+AnalysisFCChh::SortJetsByBTaggingScore(
+    ROOT::VecOps::RVec<edm4hep::ReconstructedParticleData> all_jets,
+    ROOT::VecOps::RVec<edm4hep::ReconstructedParticleData> sel_jets,
+    ROOT::VecOps::RVec<int> sel_jets_idx, 
+    ROOT::VecOps::RVec<edm4hep::ParticleIDData> all_jets_tags,
+    ROOT::VecOps::RVec<podio::ObjectID> all_jets_tags_indices,
+    ROOT::VecOps::RVec<float> all_jets_tags_values) {
+
+    if (sel_jets.size() < 2) {
+        return sel_jets;
+    } else {
+    // get the indices of the jets passing the three b-tagging requirements
+    // indices 0 to 2 are for loose, medium and tight b-tagging
+    ROOT::VecOps::RVec<bool> sel_jets_pass_loose = get_pass_tag(all_jets, sel_jets_idx, all_jets_tags, all_jets_tags_indices, all_jets_tags_values, 0);
+    ROOT::VecOps::RVec<bool> sel_jets_pass_medium = get_pass_tag(all_jets, sel_jets_idx, all_jets_tags, all_jets_tags_indices, all_jets_tags_values, 1);
+    ROOT::VecOps::RVec<bool> sel_jets_pass_tight = get_pass_tag(all_jets, sel_jets_idx, all_jets_tags, all_jets_tags_indices, all_jets_tags_values, 2);
+    ROOT::VecOps::RVec<int> sel_jets_btag_score = get_btagging_score(sel_jets_pass_loose, sel_jets_pass_medium, sel_jets_pass_tight);
+
+    // create auxiliary vector with indices
+    std::vector <int> temp(sel_jets_idx.size());
+    std::iota(temp.begin(), temp.end(), 0);
+    // sort this auxiliary vector by the b-tag score of the jet
+    auto sort_by_btag_score = [&](int i, int j) {
+      return (sel_jets_btag_score.at(i) > sel_jets_btag_score.at(j));
+    };
+
+    std::sort(temp.begin(), temp.end(), sort_by_btag_score);
+    // fill another jet array with following the sorted indices
+    ROOT::VecOps::RVec<edm4hep::ReconstructedParticleData> ordered_sel_jets(sel_jets.size());
+    for (size_t i = 0; i < temp.size(); i++) {
+      ordered_sel_jets.at(i) = sel_jets.at(temp.at(i));
+    }
+    return ordered_sel_jets;
+  }
+}
+
 // build all pairs from the input particles -> this returns the pair made of pT
 // leading particles!!!
 ROOT::VecOps::RVec<RecoParticlePair> AnalysisFCChh::getPairs(

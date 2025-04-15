@@ -220,6 +220,23 @@ ROOT::VecOps::RVec<int> SortParticleCollection(
         ROOT::VecOps::RVec<edm4hep::ReconstructedParticleData> particles_in, ROOT::VecOps::RVec<int> indices);
 ROOT::VecOps::RVec<edm4hep::MCParticleData> SortParticleCollection(
     ROOT::VecOps::RVec<edm4hep::MCParticleData> particles_in);
+// Sort jets based on b-tagging score
+ROOT::VecOps::RVec<edm4hep::ReconstructedParticleData>
+    SortJetsByBTaggingScore(
+    ROOT::VecOps::RVec<edm4hep::ReconstructedParticleData> all_jets,
+    ROOT::VecOps::RVec<edm4hep::ReconstructedParticleData> sel_jets,
+    ROOT::VecOps::RVec<int> sel_jets_idx, 
+    ROOT::VecOps::RVec<edm4hep::ParticleIDData> all_jets_tags,
+    ROOT::VecOps::RVec<podio::ObjectID> all_jets_tags_indices,
+    ROOT::VecOps::RVec<float> all_jets_tags_values);
+ROOT::VecOps::RVec<int>
+    SortJetsByBTaggingScore(
+    ROOT::VecOps::RVec<edm4hep::ReconstructedParticleData> all_jets,
+    ROOT::VecOps::RVec<int> sel_jets_idx, 
+    ROOT::VecOps::RVec<edm4hep::ParticleIDData> all_jets_tags,
+    ROOT::VecOps::RVec<podio::ObjectID> all_jets_tags_indices,
+    ROOT::VecOps::RVec<float> all_jets_tags_values);
+
 // btags
 ROOT::VecOps::RVec<bool>
 getJet_tag(ROOT::VecOps::RVec<int> index,
