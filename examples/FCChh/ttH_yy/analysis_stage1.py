@@ -85,15 +85,26 @@ class Analysis():
 
             # generator event weight
             .Define("weight",  "EventHeader.weight")
-
+            # event number
+            .Define("event_number", "EventHeader.eventNumber")
+            .Define("run_number", "EventHeader.runNumber")
+            ################################## RECO TO TRUTH ASSOCIATIONS ##################################
+            # reco-to-MC particle association
+            .Alias("MCRecoAssociations0", "_MCRecoAssociations_from.index")
+            .Alias("MCRecoAssociations1", "_MCRecoAssociations_to.index")
+            .Define("RP2MC_index", "FCCAnalyses::ReconstructedParticle2MC::getRP2MC_index(MCRecoAssociations0, MCRecoAssociations1, ReconstructedParticles)")
             ########################################### PHOTONS ########################################### 
             # all photons passing particle ID
-            .Define("gamma",  "FCCAnalyses::ReconstructedParticle::get(Photon_objIdx.index, ReconstructedParticles)")
-            .Define("idx_gamma",  "FCCAnalyses::ReconstructedParticle::get_idx(gamma)")
+            .Define("gamma_original",  "FCCAnalyses::ReconstructedParticle::get(Photon_objIdx.index, ReconstructedParticles)")
+            .Define("photon_indices", "FCCAnalyses::ReconstructedParticle::get_idx_clean(Photon_objIdx.index)")
+            .Define("gamma", "FCCAnalyses::SmearObjects::SmearedReconstructedParticle(1, 22, 2, event_number[0], false)(ReconstructedParticles, RP2MC_index, Particle, photon_indices)")
+            .Define("idx_gamma",  "FCCAnalyses::ReconstructedParticle::get_idx(gamma)") # get indices of each photon in the "gamma" collection
+            .Define("idx_gamma1", "photon_indices")
             # apply pT selection
             .Define("selpt_gamma", "FCCAnalyses::ReconstructedParticle::sel_pt({photon_pt})(gamma)".format(photon_pt=self.ana_args.photon_pt))
+            # for each selection, keep track of the indices of the selected particles in the original collections
             .Define("idx_selpt_gamma", "FCCAnalyses::ReconstructedParticle::sel_pt({photon_pt})(gamma, idx_gamma)".format(photon_pt=self.ana_args.photon_pt))
-            .Define("idx_selpt_gamma1", "FCCAnalyses::ReconstructedParticle::sel_pt({photon_pt})(gamma, Photon_objIdx.index)".format(photon_pt=self.ana_args.photon_pt))
+            .Define("idx_selpt_gamma1", "FCCAnalyses::ReconstructedParticle::sel_pt({photon_pt})(gamma, idx_gamma1)".format(photon_pt=self.ana_args.photon_pt))
             # apply |eta| selection
             .Define("sel_gamma_unsort", "FCCAnalyses::ReconstructedParticle::sel_eta(6.)(selpt_gamma)")
             .Define("idx_sel_gamma_unsort", "FCCAnalyses::ReconstructedParticle::sel_eta(6.)(selpt_gamma, idx_selpt_gamma)")
@@ -133,8 +144,6 @@ class Analysis():
             .Define("idx_y2", "(n_photons > 1) ? idx_sel_gamma1[1] : -999.")
             .Define("DR_y_y", "(n_photons > 1) ? FCCAnalyses::ReconstructedParticle::get_tlv(sel_gamma[0]).DeltaR(FCCAnalyses::ReconstructedParticle::get_tlv(sel_gamma[1])) : -999.")
             # reco-to-MC particle association
-            .Alias("MCRecoAssociations0", "_MCRecoAssociations_from.index")
-            .Alias("MCRecoAssociations1", "_MCRecoAssociations_to.index")
             .Define("true_TLV", "ReconstructedParticle2MC::getRP2MC_tlv(MCRecoAssociations0, MCRecoAssociations1, ReconstructedParticles, Particle)")
             .Define("pdgID_y1", "(idx_y1 >= 0 ) ? ReconstructedParticles.PDG.at(idx_y1) : -999")
             .Define("pdgID_y2", "(idx_y2 >= 0 ) ? ReconstructedParticles.PDG.at(idx_y2) : -999")
@@ -154,7 +163,6 @@ class Analysis():
             .Define("true_theta_y_y", "(idx_y1 >= 0 && idx_y2 >=0) ? true_TLV_y1.Vect().Angle(true_TLV_y2.Vect()) : -999.")
             .Define("true_cos_theta_y_y", "(idx_y1 >= 0 && idx_y2 >=0) ? TMath::Cos(true_theta_y_y) : -999.")
             # check if the selected reco photons have Higgs parents
-            .Define("RP2MC_index", "FCCAnalyses::ReconstructedParticle2MC::getRP2MC_index(MCRecoAssociations0, MCRecoAssociations1, ReconstructedParticles)")
             .Define("has_higgs_parent_y1", "(idx_y1 >= 0) ? AnalysisFCChh::hasHiggsParent(Particle.at(RP2MC_index[idx_y1]), _Particle_parents, Particle) : false")
             .Define("has_higgs_parent_y2", "(idx_y2 >= 0) ? AnalysisFCChh::hasHiggsParent(Particle.at(RP2MC_index[idx_y2]), _Particle_parents, Particle) : false")       
             # get truth photons from Higgs
@@ -248,13 +256,13 @@ class Analysis():
             # select electrons at 15 GeV
             .Define("sel_leptons", "FCCAnalyses::ReconstructedParticle::sel_pt(15.)(leptons)")
             .Define("n_leptons",  "FCCAnalyses::ReconstructedParticle::get_n(sel_leptons)")
-            # first two electrons
-            # leading electron
+            # first two leptons
+            # leading lepton
             .Define("E_l1", "(n_leptons > 0) ? E_leptons[0] : -999.")
             .Define("pT_l1", "(n_leptons > 0) ? pT_leptons[0] : -999.")
             .Define("eta_l1", "(n_leptons > 0) ? eta_leptons[0] : -999.")
             .Define("phi_l1", "(n_leptons > 0) ? phi_leptons[0] : -999.")
-            # subleading electron
+            # subleading lepton
             .Define("E_l2", "(n_leptons > 1) ? E_leptons[1] : -999.")
             .Define("pT_l2", "(n_leptons > 1) ? pT_leptons[1] : -999.")
             .Define("eta_l2", "(n_leptons > 1) ? eta_leptons[1] : -999.")
@@ -343,20 +351,17 @@ class Analysis():
             .Define("central_jets_unsort", "FCCAnalyses::ReconstructedParticle::sel_eta(2.5)(selpt_jets)")
             .Define("central_jets", "AnalysisFCChh::SortParticleCollection(central_jets_unsort)") 
             .Define("n_central_jets",  "FCCAnalyses::ReconstructedParticle::get_n(central_jets)")
-            # b-tagged jets at medium working point
-            .Define("b_tagged_jets", "AnalysisFCChh::get_tagged_jets(Jet, Jet_HF_tags, _Jet_HF_tags_particle, _Jet_HF_tags_parameters, 1)")
-            .Define("idx_b_tagged_jets", "AnalysisFCChh::get_tagged_jets_idx(Jet, Jet_HF_tags, _Jet_HF_tags_particle, _Jet_HF_tags_parameters, 1)")
-            # select medium b-jets with pT > 25 GeV
+            # get jets and order them by b-tagging score
+            .Define("b_tagged_jets", "Jet")
+            .Define("idx_b_tagged_jets",  "FCCAnalyses::ReconstructedParticle::get_idx(b_tagged_jets)") # get indices of each photon in the "gamma" collection
+            # select jets with pT > 25 GeV
             .Define("selpt_bjets", "FCCAnalyses::ReconstructedParticle::sel_pt({jet_pt})(b_tagged_jets)".format(jet_pt=self.ana_args.jet_pt))
             .Define("idx_selpt_bjets", "FCCAnalyses::ReconstructedParticle::sel_pt({jet_pt})(b_tagged_jets, idx_b_tagged_jets)".format(jet_pt=self.ana_args.jet_pt))
-            # select mediumd b-jets with pT > 25 GeV and with |eta| < 4
-            .Define("sel_bjets_unsort", "FCCAnalyses::ReconstructedParticle::sel_eta(4)(selpt_bjets)")
-            .Define("idx_sel_bjets_unsort", "FCCAnalyses::ReconstructedParticle::sel_eta(4)(selpt_bjets, idx_selpt_bjets)")
-            # sort selected b-jets by pT
-            .Define("sel_bjets", "AnalysisFCChh::SortParticleCollection(sel_bjets_unsort)") 
-            .Define("idx_sel_bjets", "AnalysisFCChh::SortParticleCollection(sel_bjets_unsort, idx_sel_bjets_unsort)")
+            # sort jets based on b-tagging score
+            .Define("sel_bjets", "AnalysisFCChh::SortJetsByBTaggingScore(Jet, selpt_bjets, idx_selpt_bjets, Jet_HF_tags, _Jet_HF_tags_particle, _Jet_HF_tags_parameters)")
+            .Define("idx_sel_bjets", "AnalysisFCChh::SortJetsByBTaggingScore(Jet, idx_selpt_bjets, Jet_HF_tags, _Jet_HF_tags_particle, _Jet_HF_tags_parameters)")
             # save output branches
-            .Define("n_bjets", "FCCAnalyses::ReconstructedParticle::get_n(sel_bjets)")
+            .Define("n_all_bjets", "FCCAnalyses::ReconstructedParticle::get_n(sel_bjets)")
             .Define("E_bjets",  "FCCAnalyses::ReconstructedParticle::get_e(sel_bjets)")
             .Define("pT_bjets",  "FCCAnalyses::ReconstructedParticle::get_pt(sel_bjets)")
             .Define("eta_bjets",  "FCCAnalyses::ReconstructedParticle::get_eta(sel_bjets)")
@@ -365,30 +370,100 @@ class Analysis():
             .Define("pass_medium_btag_bjets", "AnalysisFCChh::get_pass_tag(Jet, idx_sel_bjets, Jet_HF_tags, _Jet_HF_tags_particle, _Jet_HF_tags_parameters, 1)") 
             .Define("pass_tight_btag_bjets", "AnalysisFCChh::get_pass_tag(Jet, idx_sel_bjets, Jet_HF_tags, _Jet_HF_tags_particle, _Jet_HF_tags_parameters, 2)") 
             .Define("btag_score_bjets", "AnalysisFCChh::get_btagging_score(pass_loose_btag_bjets, pass_medium_btag_bjets, pass_tight_btag_bjets)") 
-            # bb object
-            .Define("bb_pairs_unmerged", "AnalysisFCChh::getPairs(selpt_bjets)") # retrieves the leading pT pair of all possible 
-            .Define("bb_pairs", "AnalysisFCChh::merge_pairs(bb_pairs_unmerged)") # merge pair into one object to access inv masses etc
-            .Define("m_bb", "FCCAnalyses::ReconstructedParticle::get_mass(bb_pairs)")
-            .Define("pT_bb", "FCCAnalyses::ReconstructedParticle::get_pt(bb_pairs)")
-            # first two b-jets
-            # leading b-jet
-            .Define("E_b1", "(n_bjets > 0) ? E_bjets[0] : -999.")
-            .Define("pT_b1", "(n_bjets > 0) ? pT_bjets[0] : -999.")
-            .Define("eta_b1", "(n_bjets > 0) ? eta_bjets[0] : -999.")
-            .Define("phi_b1", "(n_bjets > 0) ? phi_bjets[0] : -999.")
-            .Define("pass_loose_btag_b1", "(n_bjets > 0) ? pass_loose_btag_bjets[0] : -999.")
-            .Define("pass_medium_btag_b1", "(n_bjets > 0) ? pass_medium_btag_bjets[0] : -999.")
-            .Define("pass_tight_btag_b1", "(n_bjets > 0) ? pass_tight_btag_bjets[0] : -999.")
-            .Define("btag_score_b1", "(n_bjets > 0) ? btag_score_bjets[0] : -999.")
-            # subleading b-jet
-            .Define("E_b2", "n_bjets > 1 ? E_bjets[1] : -999.")
-            .Define("pT_b2", "n_bjets > 1 ? pT_bjets[1] : -999.")
-            .Define("eta_b2", "n_bjets > 1 ? eta_bjets[1] : -999.")
-            .Define("phi_b2", "n_bjets > 1 ? phi_bjets[1] : -999.")
-            .Define("pass_loose_btag_b2", "(n_bjets > 1) ? pass_loose_btag_bjets[1] : -999.")
-            .Define("pass_medium_btag_b2", "(n_bjets > 1) ? pass_medium_btag_bjets[1] : -999.")
-            .Define("pass_tight_btag_b2", "(n_bjets > 1) ? pass_tight_btag_bjets[1] : -999.")
-            .Define("btag_score_b2", "(n_bjets > 1) ? btag_score_bjets[1] : -999.")
+            ### the first two b-jets are the ones from the top quarks
+            ### leading b-jet
+            .Define("E_b1", "(n_all_bjets > 0) ? E_bjets[0] : -999.")
+            .Define("pT_b1", "(n_all_bjets > 0) ? pT_bjets[0] : -999.")
+            .Define("eta_b1", "(n_all_bjets > 0) ? eta_bjets[0] : -999.")
+            .Define("phi_b1", "(n_all_bjets > 0) ? phi_bjets[0] : -999.")
+            .Define("pass_loose_btag_b1", "(n_all_bjets > 0) ? pass_loose_btag_bjets[0] : -999.")
+            .Define("pass_medium_btag_b1", "(n_all_bjets > 0) ? pass_medium_btag_bjets[0] : -999.")
+            .Define("pass_tight_btag_b1", "(n_all_bjets > 0) ? pass_tight_btag_bjets[0] : -999.")
+            .Define("btag_score_b1", "(n_all_bjets > 0) ? btag_score_bjets[0] : -999.")
+            ### subleading b-jet
+            .Define("E_b2", "(n_all_bjets > 1) ? E_bjets[1] : -999.")
+            .Define("pT_b2", "(n_all_bjets > 1) ? pT_bjets[1] : -999.")
+            .Define("eta_b2", "(n_all_bjets > 1) ? eta_bjets[1] : -999.")
+            .Define("phi_b2", "(n_all_bjets > 1) ? phi_bjets[1] : -999.")
+            .Define("pass_loose_btag_b2", "(n_all_bjets > 1) ? pass_loose_btag_bjets[1] : -999.")
+            .Define("pass_medium_btag_b2", "(n_all_bjets > 1) ? pass_medium_btag_bjets[1] : -999.")
+            .Define("pass_tight_btag_b2", "(n_all_bjets > 1) ? pass_tight_btag_bjets[1] : -999.")
+            .Define("btag_score_b2", "(n_all_bjets > 1) ? btag_score_bjets[1] : -999.")
+            ### check how many medium b-jets there are
+            .Define("medium_btagged_jets", "AnalysisFCChh::get_tagged_jets(Jet, Jet_HF_tags, _Jet_HF_tags_particle, _Jet_HF_tags_parameters, 1)")
+            .Define("n_bjets", "FCCAnalyses::ReconstructedParticle::get_n(medium_btagged_jets)")
+            .Define("n_medium_bjets", "std::count(pass_medium_btag_bjets.begin(), pass_medium_btag_bjets.end(), true);")
+            .Define("n_loose_bjets", "std::count(pass_loose_btag_bjets.begin(), pass_loose_btag_bjets.end(), true);")
+            .Define("n_tight_bjets", "std::count(pass_tight_btag_bjets.begin(), pass_tight_btag_bjets.end(), true);")
+            ### bb object
+            .Define("b1", "n_all_bjets > 0 ? FCCAnalyses::ReconstructedParticle::get_tlv(sel_bjets.at(0)) : TLorentzVector(0.,0.,0.,0.)")
+            .Define("b2", "n_all_bjets > 1 ? FCCAnalyses::ReconstructedParticle::get_tlv(sel_bjets.at(1)) : TLorentzVector(0.,0.,0.,0.)")
+            .Define("m_bb", "n_all_bjets > 1 ? (b1+b2).M() : -999.")
+            .Define("pT_bb", "n_all_bjets > 1 ? (b1+b2).Pt() : -999.")
+            ### get light jets
+            ### assume that the first two jets are the b-jets from the top quark
+            .Define("helper", "(sel_bjets.size()>1) ? 2-sel_bjets.size() : 0")
+            .Define("sel_light_jets_unsorted", "ROOT::VecOps::Take(sel_bjets, helper)")
+            .Define("idx_light_jets_unsorted", "ROOT::VecOps::Take(idx_sel_bjets, helper)")
+            ### sort light jets by pT
+            .Define("sel_light_jets", "AnalysisFCChh::SortParticleCollection(sel_light_jets_unsorted)")
+            .Define("idx_sel_light_jets", "AnalysisFCChh::SortParticleCollection(sel_light_jets_unsorted, idx_light_jets_unsorted)")
+            ### output branches
+            .Define("n_light_jets", "FCCAnalyses::ReconstructedParticle::get_n(sel_light_jets)")
+            .Define("E_light_jets",  "FCCAnalyses::ReconstructedParticle::get_e(sel_light_jets)")
+            .Define("pT_light_jets",  "FCCAnalyses::ReconstructedParticle::get_pt(sel_light_jets)")
+            .Define("eta_light_jets",  "FCCAnalyses::ReconstructedParticle::get_eta(sel_light_jets)")
+            .Define("phi_light_jets",  "FCCAnalyses::ReconstructedParticle::get_phi(sel_light_jets)")
+            .Define("pass_loose_btag_light_jets", "AnalysisFCChh::get_pass_tag(Jet, idx_sel_light_jets, Jet_HF_tags, _Jet_HF_tags_particle, _Jet_HF_tags_parameters, 0)")
+            .Define("pass_medium_btag_light_jets", "AnalysisFCChh::get_pass_tag(Jet, idx_sel_light_jets, Jet_HF_tags, _Jet_HF_tags_particle, _Jet_HF_tags_parameters, 1)")
+            .Define("pass_tight_btag_light_jets", "AnalysisFCChh::get_pass_tag(Jet, idx_sel_light_jets, Jet_HF_tags, _Jet_HF_tags_particle, _Jet_HF_tags_parameters, 2)")
+            .Define("btag_score_light_jets", "AnalysisFCChh::get_btagging_score(pass_loose_btag_light_jets, pass_medium_btag_light_jets, pass_tight_btag_light_jets)")
+            # first five light jets
+            # leading light jet
+            .Define("E_light1", "(n_light_jets > 0) ? E_light_jets[0] : -999.")
+            .Define("pT_light1", "(n_light_jets > 0) ? pT_light_jets[0] : -999.")
+            .Define("eta_light1", "(n_light_jets > 0) ? eta_light_jets[0] : -999.")
+            .Define("phi_light1", "(n_light_jets > 0) ? phi_light_jets[0] : -999.")
+            .Define("pass_loose_btag_light1", "(n_light_jets > 0) ? pass_loose_btag_light_jets[0] : -999.")
+            .Define("pass_medium_btag_light1", "(n_light_jets > 0) ? pass_medium_btag_light_jets[0] : -999.")
+            .Define("pass_tight_btag_light1", "(n_light_jets > 0) ? pass_tight_btag_light_jets[0] : -999.")
+            .Define("btag_score_light1", "(n_light_jets > 0) ? btag_score_light_jets[0] : -999.")
+            # subleading light jet
+            .Define("E_light2", "(n_light_jets > 1) ? E_light_jets[1] : -999.")
+            .Define("pT_light2", "(n_light_jets > 1) ? pT_light_jets[1] : -999.")
+            .Define("eta_light2", "(n_light_jets > 1) ? eta_light_jets[1] : -999.")
+            .Define("phi_light2", "(n_light_jets > 1) ? phi_light_jets[1] : -999.")
+            .Define("pass_loose_btag_light2", "(n_light_jets > 1) ? pass_loose_btag_light_jets[1] : -999.")
+            .Define("pass_medium_btag_light2", "(n_light_jets > 1) ? pass_medium_btag_light_jets[1] : -999.")
+            .Define("pass_tight_btag_light2", "(n_light_jets > 1) ? pass_tight_btag_light_jets[1] : -999.")
+            .Define("btag_score_light2", "(n_light_jets > 1) ? btag_score_light_jets[1] : -999.")
+            # 3-rd light jet
+            .Define("E_light3", "(n_light_jets > 2) ? E_light_jets[2] : -999.")
+            .Define("pT_light3", "(n_light_jets > 2) ? pT_light_jets[2] : -999.")
+            .Define("eta_light3", "(n_light_jets > 2) ? eta_light_jets[2] : -999.")
+            .Define("phi_light3", "(n_light_jets > 2) ? phi_light_jets[2] : -999.")
+            .Define("pass_loose_btag_light3", "(n_light_jets > 2) ? pass_loose_btag_light_jets[2] : -999.")
+            .Define("pass_medium_btag_light3", "(n_light_jets > 2) ? pass_medium_btag_light_jets[2] : -999.")
+            .Define("pass_tight_btag_light3", "(n_light_jets > 2) ? pass_tight_btag_light_jets[2] : -999.")
+            .Define("btag_score_light3", "(n_light_jets > 2) ? btag_score_light_jets[2] : -999.")
+            # 4-th light jet
+            .Define("E_light4", "(n_light_jets > 3) ? E_light_jets[3] : -999.")
+            .Define("pT_light4", "(n_light_jets > 3) ? pT_light_jets[3] : -999.")
+            .Define("eta_light4", "(n_light_jets > 3) ? eta_light_jets[3] : -999.")
+            .Define("phi_light4", "(n_light_jets > 3) ? phi_light_jets[3] : -999.")
+            .Define("pass_loose_btag_light4", "(n_light_jets > 3) ? pass_loose_btag_light_jets[3] : -999.")
+            .Define("pass_medium_btag_light4", "(n_light_jets > 3) ? pass_medium_btag_light_jets[3] : -999.")
+            .Define("pass_tight_btag_light4", "(n_light_jets > 3) ? pass_tight_btag_light_jets[3] : -999.")
+            .Define("btag_score_light4", "(n_light_jets > 3) ? btag_score_light_jets[3] : -999.")
+            # 5-th light jet
+            .Define("E_light5", "(n_light_jets > 4) ? E_light_jets[4] : -999.")
+            .Define("pT_light5", "(n_light_jets > 4) ? pT_light_jets[4] : -999.")
+            .Define("eta_light5", "(n_light_jets > 4) ? eta_light_jets[4] : -999.")
+            .Define("phi_light5", "(n_light_jets > 4) ? phi_light_jets[4] : -999.")
+            .Define("pass_loose_btag_light5", "(n_light_jets > 4) ? pass_loose_btag_light_jets[4] : -999.")
+            .Define("pass_medium_btag_light5", "(n_light_jets > 4) ? pass_medium_btag_light_jets[4] : -999.")
+            .Define("pass_tight_btag_light5", "(n_light_jets > 4) ? pass_tight_btag_light_jets[4] : -999.")
+            .Define("btag_score_light5", "(n_light_jets > 4) ? btag_score_light_jets[4] : -999.")
             # scalar sum of all jet's momenta
             .Define("HT", "AnalysisFCChh::get_HT_jets(Jet)")
             # topness
@@ -403,7 +478,7 @@ class Analysis():
             .Define("DR_y1_b2", "(n_photons > 0 && n_bjets > 1) ? FCCAnalyses::ReconstructedParticle::get_tlv(sel_gamma[0]).DeltaR(FCCAnalyses::ReconstructedParticle::get_tlv(sel_bjets[1])) : -999.")
             .Define("DR_y2_b1", "(n_photons > 1 && n_bjets > 0) ? FCCAnalyses::ReconstructedParticle::get_tlv(sel_gamma[1]).DeltaR(FCCAnalyses::ReconstructedParticle::get_tlv(sel_bjets[0])) : -999.")
             .Define("DR_y2_b2", "(n_photons > 1 && n_bjets > 1) ? FCCAnalyses::ReconstructedParticle::get_tlv(sel_gamma[1]).DeltaR(FCCAnalyses::ReconstructedParticle::get_tlv(sel_bjets[1])) : -999.")
-            # delta R between the two b-jets
+            ## # delta R between the two b-jets
             .Define("DR_b_b", "(n_bjets > 1) ? FCCAnalyses::ReconstructedParticle::get_tlv(sel_bjets[0]).DeltaR(FCCAnalyses::ReconstructedParticle::get_tlv(sel_bjets[1])) : -999.")
             ########################################### MET ########################################### 
             .Define("MET", "FCCAnalyses::ReconstructedParticle::get_pt(MissingET)")
@@ -464,7 +539,7 @@ class Analysis():
             .Define("phi_truth_y2", "(n_truth_photons > 1) ? phi_truth_photons[1] : -999.")
             ########################################### APPLY PRE-SELECTION ########################################### 
             # require H->yy decay for signal sample
-#            .Filter("higgs_decay_type==7")
+            #.Filter("higgs_decay_type==7")
         )
         return dframe2
 
@@ -475,7 +550,7 @@ class Analysis():
         Output variables which will be saved to output root file.
         '''
         branch_list = [
-            'weight',
+            'weight', 'event_number',
             # Photons
             'n_photons', 'E_photons', 'pT_photons', 'eta_photons', 'phi_photons',
             'm_yy', "pT_yy", "rapidity_yy",
@@ -513,7 +588,7 @@ class Analysis():
             "m_ll",
             "E_l1", "pT_l1", "eta_l1", "phi_l1",
             "E_l2", "pT_l2", "eta_l2", "phi_l2",
-            # Jets and b-tagged jets:
+            # Jets (ordered by pT)
             'n_jets', 'E_jets', 'pT_jets', 'eta_jets', 'phi_jets', 
             "pass_loose_btag_jets", "pass_medium_btag_jets", "pass_tight_btag_jets",
             "btag_score_jets",
@@ -523,13 +598,23 @@ class Analysis():
              "E_j4", "pT_j4", "eta_j4", "phi_j4", "pass_loose_btag_j4", "pass_medium_btag_j4", "pass_tight_btag_j4", "btag_score_j4",
              "E_j5", "pT_j5", "eta_j5", "phi_j5", "pass_loose_btag_j5", "pass_medium_btag_j5", "pass_tight_btag_j5", "btag_score_j5",
              "E_j6", "pT_j6", "eta_j6", "phi_j6", "pass_loose_btag_j6", "pass_medium_btag_j6", "pass_tight_btag_j6", "btag_score_j6",
-            "n_central_jets",
-            'n_bjets', 'E_bjets', 'pT_bjets', 'eta_bjets', 'phi_bjets', 
+            # Jets ordered by b-tagging score
+            'n_bjets', 
+            'E_bjets', 'pT_bjets', 'eta_bjets', 'phi_bjets', 
             "pass_loose_btag_bjets", "pass_medium_btag_bjets", "pass_tight_btag_bjets",
             "btag_score_bjets",
+            "n_medium_bjets", "n_loose_bjets", "n_tight_bjets",
+            ## # leading and subleading b-jets (ordered by b-tagging score)
             "E_b1", "pT_b1", "eta_b1", "phi_b1", "pass_loose_btag_b1", "pass_medium_btag_b1", "pass_tight_btag_b1", "btag_score_b1",
             "E_b2", "pT_b2", "eta_b2", "phi_b2", "pass_loose_btag_b2", "pass_medium_btag_b2", "pass_tight_btag_b2", "btag_score_b2",
             "m_bb", "pT_bb",
+            # light jets (ordered by pT again)
+            "E_light1", "pT_light1", "eta_light1", "phi_light1", "pass_loose_btag_light1", "pass_medium_btag_light1", "pass_tight_btag_light1", "btag_score_light1",
+            "E_light2", "pT_light2", "eta_light2", "phi_light2", "pass_loose_btag_light2", "pass_medium_btag_light2", "pass_tight_btag_light2", "btag_score_light2",
+            "E_light3", "pT_light3", "eta_light3", "phi_light3", "pass_loose_btag_light3", "pass_medium_btag_light3", "pass_tight_btag_light3", "btag_score_light3",
+            "E_light4", "pT_light4", "eta_light4", "phi_light4", "pass_loose_btag_light4", "pass_medium_btag_light4", "pass_tight_btag_light4", "btag_score_light4",
+            "E_light5", "pT_light5", "eta_light5", "phi_light5", "pass_loose_btag_light5", "pass_medium_btag_light5", "pass_tight_btag_light5", "btag_score_light5",
+            # Other jet variables
             "HT", "topness",
             # Missing transverse energy
             'MET', 'MET_x', 'MET_y', 'MET_phi',
@@ -541,10 +626,10 @@ class Analysis():
             'n_tops', 'E_tops', 'pT_tops', 'eta_tops', 'phi_tops', 'rapidity_tops',
             'E_top1', 'pT_top1', 'eta_top1', 'phi_top1',
             'E_top2', 'pT_top2', 'eta_top2', 'phi_top2',
-            # truth photons
-            'n_truth_photons', #'E_truth_photons', 'pT_truth_photons', 'eta_truth_photons', 'phi_truth_photons',
-            'truth_m_yy',
-            'E_truth_y1', 'pT_truth_y1', 'eta_truth_y1', 'phi_truth_y1',
-            'E_truth_y2', 'pT_truth_y2', 'eta_truth_y2', 'phi_truth_y2',
+            ## # truth photons
+            ## 'n_truth_photons', #'E_truth_photons', 'pT_truth_photons', 'eta_truth_photons', 'phi_truth_photons',
+            ## 'truth_m_yy',
+            ## 'E_truth_y1', 'pT_truth_y1', 'eta_truth_y1', 'phi_truth_y1',
+            ## 'E_truth_y2', 'pT_truth_y2', 'eta_truth_y2', 'phi_truth_y2',
         ]
         return branch_list
