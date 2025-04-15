@@ -117,6 +117,9 @@ namespace ReconstructedParticle{
   // return the indices
   ROOT::VecOps::RVec<int> get_idx(ROOT::VecOps::RVec<edm4hep::ReconstructedParticleData> in);
 
+  // clean up the indices
+  ROOT::VecOps::RVec<int> get_idx_clean(ROOT::VecOps::RVec<int> indices);
+
   /// return the transverse momenta of the input ReconstructedParticles
   ROOT::VecOps::RVec<float> get_pt(ROOT::VecOps::RVec<edm4hep::ReconstructedParticleData> in);
 
