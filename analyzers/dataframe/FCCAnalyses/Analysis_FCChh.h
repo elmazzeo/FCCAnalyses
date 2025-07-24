@@ -16,6 +16,7 @@
 #include <iostream>
 
 #include "ReconstructedParticle2MC.h"
+#include "ReconstructedParticle.h"
 
 namespace AnalysisFCChh {
 
@@ -58,6 +59,38 @@ struct RecoParticlePair {
     }
   }
 };
+
+struct RecoParticleIdxPair {
+    edm4hep::ReconstructedParticleData particle_1;
+    edm4hep::ReconstructedParticleData particle_2;
+    int index_1;
+    int index_2;
+    TLorentzVector merged_TLV() {
+      TLorentzVector tlv_1 = getTLV_reco(particle_1);
+      TLorentzVector tlv_2 = getTLV_reco(particle_2);
+      return tlv_1 + tlv_2;
+    }
+    void sort_by_pT() {
+      double pT_1 = sqrt(particle_1.momentum.x * particle_1.momentum.x +
+                         particle_1.momentum.y * particle_1.momentum.y);
+      double pT_2 = sqrt(particle_2.momentum.x * particle_2.momentum.x +
+                         particle_2.momentum.y * particle_2.momentum.y);
+  
+      if (pT_1 >= pT_2) {
+        return;
+      } // nothing to do if already sorted corrected
+      else {
+        edm4hep::ReconstructedParticleData sublead = particle_1;
+        int sublead_index = index_1;
+
+        particle_1 = particle_2;
+        particle_2 = sublead;
+        index_1 = index_2;
+        index_2 = sublead_index;
+        return;
+      }
+    }
+  };
 
 // same for MC particle
 struct MCParticlePair {
@@ -137,6 +170,9 @@ bool isTop(edm4hep::MCParticleData truth_part);
 bool isGluon(edm4hep::MCParticleData truth_part);
 bool isc(edm4hep::MCParticleData truth_part);
 bool iss(edm4hep::MCParticleData truth_part);
+bool isu(edm4hep::MCParticleData truth_part);
+bool isd(edm4hep::MCParticleData truth_part);
+bool isElectron(edm4hep::MCParticleData truth_part);
 bool isMuon(edm4hep::MCParticleData truth_part);
 int checkZDecay(edm4hep::MCParticleData truth_Z,
                 ROOT::VecOps::RVec<podio::ObjectID> daughter_ids,
@@ -148,6 +184,9 @@ int findTopDecayChannel(
     ROOT::VecOps::RVec<edm4hep::MCParticleData> truth_particles,
     ROOT::VecOps::RVec<podio::ObjectID> daughter_ids);
 int findHiggsDecayChannel(
+    ROOT::VecOps::RVec<edm4hep::MCParticleData> truth_particles,
+    ROOT::VecOps::RVec<podio::ObjectID> daughter_ids);
+int findZDecayChannel(
     ROOT::VecOps::RVec<edm4hep::MCParticleData> truth_particles,
     ROOT::VecOps::RVec<podio::ObjectID> daughter_ids);
 // find reco photons from Higgs
@@ -188,6 +227,10 @@ getTruthZll(ROOT::VecOps::RVec<edm4hep::MCParticleData> truth_particles,
 ROOT::VecOps::RVec<RecoParticlePair>
 getOSPairs(ROOT::VecOps::RVec<edm4hep::ReconstructedParticleData> leptons_in);
 
+ROOT::VecOps::RVec<RecoParticleIdxPair>
+getOSPairs(ROOT::VecOps::RVec<edm4hep::ReconstructedParticleData> leptons_in, 
+          ROOT::VecOps::RVec<int> leptons_in_idx);
+
 // find OS pairs in truth particles
 ROOT::VecOps::RVec<MCParticlePair>
 getOSPairs(ROOT::VecOps::RVec<edm4hep::MCParticleData> truth_parts);
@@ -212,6 +255,10 @@ ROOT::VecOps::RVec<RecoParticlePair> getPair_sublead(
     ROOT::VecOps::RVec<edm4hep::ReconstructedParticleData> particles_in);
 ROOT::VecOps::RVec<MCParticlePair>
 getPairs(ROOT::VecOps::RVec<edm4hep::MCParticleData> particles_in);
+// make a single pair of two reco particles
+ROOT::VecOps::RVec<RecoParticlePair>
+getPair(edm4hep::ReconstructedParticleData particle_1,
+        edm4hep::ReconstructedParticleData particle_2);
 
 // SORT OBJ COLLECTION
 ROOT::VecOps::RVec<edm4hep::ReconstructedParticleData> SortParticleCollection(
@@ -253,6 +300,7 @@ get_tagged_jets(ROOT::VecOps::RVec<edm4hep::ReconstructedParticleData> jets,
                 ROOT::VecOps::RVec<edm4hep::ParticleIDData> jet_tags,
                 ROOT::VecOps::RVec<podio::ObjectID> jet_tags_indices,
                 ROOT::VecOps::RVec<float> jet_tags_values, int algoIndex);
+                
 ROOT::VecOps::RVec<int>
 get_tagged_jets_idx(ROOT::VecOps::RVec<edm4hep::ReconstructedParticleData> jets,
                                 ROOT::VecOps::RVec<edm4hep::ParticleIDData> jet_tags,
@@ -273,6 +321,22 @@ ROOT::VecOps::RVec<int>
 get_btagging_score(ROOT::VecOps::RVec<bool> pass_loose,
                    ROOT::VecOps::RVec<bool> pass_medium,
                    ROOT::VecOps::RVec<bool> pass_tight);
+// get electrons from Z decays
+ROOT::VecOps::RVec<edm4hep::ReconstructedParticleData> 
+SortLeptonsFromZDecay(ROOT::VecOps::RVec<edm4hep::ReconstructedParticleData> in,
+                      ROOT::VecOps::RVec<int> in_indices,
+                      ROOT::VecOps::RVec<edm4hep::MCParticleData> all_mc_particles,
+                      ROOT::VecOps::RVec<int> rp_indices,
+                      ROOT::VecOps::RVec<int> rp2mc_indices);
+
+ROOT::VecOps::RVec<int>
+SortLeptonsIdxFromZDecay(
+    ROOT::VecOps::RVec<edm4hep::ReconstructedParticleData> in,
+    ROOT::VecOps::RVec<int> in_indices,
+    ROOT::VecOps::RVec<edm4hep::MCParticleData> all_mc_particles,
+    ROOT::VecOps::RVec<int> rp_indices,
+    ROOT::VecOps::RVec<int> rp2mc_indices);
+
 // tau jets
 ROOT::VecOps::RVec<edm4hep::MCParticleData> find_truth_matches(
     ROOT::VecOps::RVec<edm4hep::MCParticleData> truth_parts,
@@ -374,6 +438,8 @@ float
 get_HT_jets(ROOT::VecOps::RVec<edm4hep::ReconstructedParticleData> jets);
 float 
 get_topness(ROOT::VecOps::RVec<edm4hep::ReconstructedParticleData> jets);    
+ROOT::VecOps::RVec<int> 
+get_topness_jets(ROOT::VecOps::RVec<edm4hep::ReconstructedParticleData> jets);    
 
 ROOT::VecOps::RVec<float>
 get_MET_significance(ROOT::VecOps::RVec<edm4hep::ReconstructedParticleData> MET,
@@ -420,6 +486,10 @@ ROOT::VecOps::RVec<edm4hep::MCParticleData>
 get_truth_Higgs(ROOT::VecOps::RVec<edm4hep::MCParticleData> truth_particles,
                 ROOT::VecOps::RVec<podio::ObjectID> daughter_ids,
                 TString decay = "ZZ");
+// select the truth Z boson
+ROOT::VecOps::RVec<edm4hep::MCParticleData>
+get_final_Zboson(ROOT::VecOps::RVec<edm4hep::MCParticleData> truth_particles,
+                ROOT::VecOps::RVec<podio::ObjectID> daughter_ids);
 ROOT::VecOps::RVec<edm4hep::MCParticleData>
 get_truth_Z_decay(ROOT::VecOps::RVec<edm4hep::MCParticleData> truth_particles,
                   ROOT::VecOps::RVec<podio::ObjectID> daughter_ids,

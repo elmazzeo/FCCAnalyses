@@ -13,6 +13,7 @@
 // EDM4hep
 #include "edm4hep/ReconstructedParticleData.h"
 #include "edm4hep/ParticleIDData.h"
+#include "edm4hep/MCParticleData.h"
 
 namespace FCCAnalyses{
 
@@ -56,6 +57,20 @@ namespace ReconstructedParticle{
     ROOT::VecOps::RVec<edm4hep::ReconstructedParticleData> operator()(ROOT::VecOps::RVec<edm4hep::ReconstructedParticleData> in);
     ROOT::VecOps::RVec<int>  operator() (ROOT::VecOps::RVec<edm4hep::ReconstructedParticleData> in, ROOT::VecOps::RVec<int> idx);
 
+  };
+
+  /// select ReconstructedParticles by PDG ID absolute value
+  struct sel_absPdgId {
+    sel_absPdgId(const int type);
+    const int m_type;
+    ROOT::VecOps::RVec<edm4hep::ReconstructedParticleData> operator()(ROOT::VecOps::RVec<edm4hep::ReconstructedParticleData> in,
+      ROOT::VecOps::RVec<edm4hep::MCParticleData> mc,
+      ROOT::VecOps::RVec<int> rp_idx,
+      ROOT::VecOps::RVec<int> rp2mc_idx);
+    ROOT::VecOps::RVec<int>  operator() (ROOT::VecOps::RVec<edm4hep::ReconstructedParticleData> in, ROOT::VecOps::RVec<int> idx,
+      ROOT::VecOps::RVec<edm4hep::MCParticleData> mc,
+      ROOT::VecOps::RVec<int> rp_idx,
+      ROOT::VecOps::RVec<int> rp2mc_idx);
   };
 
   /// select ReconstructedParticles with transverse momentum greater than a minimum value [GeV]

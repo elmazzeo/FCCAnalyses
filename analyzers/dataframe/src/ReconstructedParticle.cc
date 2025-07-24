@@ -98,6 +98,76 @@ ROOT::VecOps::RVec<int> sel_absType::operator() (ROOT::VecOps::RVec<edm4hep::Rec
 }
 
 //#######################################################################//
+//                               sel_absPdgId                             //
+//#######################################################################//
+
+sel_absPdgId::sel_absPdgId(const int type) : m_type(type) {
+  if (m_type < 0) {
+    throw std::invalid_argument(
+        "ReconstructedParticle::sel_absPdgId: Received negative value!");
+  }
+}
+
+ROOT::VecOps::RVec<edm4hep::ReconstructedParticleData> sel_absPdgId::operator()(
+    ROOT::VecOps::RVec<edm4hep::ReconstructedParticleData> in,
+    ROOT::VecOps::RVec<edm4hep::MCParticleData> mc,
+    ROOT::VecOps::RVec<int> rp_idx,
+    ROOT::VecOps::RVec<int> rp2mc_idx) {
+      
+  ROOT::VecOps::RVec<edm4hep::ReconstructedParticleData> result;
+  result.reserve(in.size());
+
+  for (size_t i = 0; i < in.size(); ++i) {
+    int reco_idx = rp_idx.at(i);
+    if (rp2mc_idx.at(reco_idx) < 0) continue;
+    auto mc_idx = rp2mc_idx.at(reco_idx);
+    if (mc_idx >= mc.size()) {
+      throw std::out_of_range(
+          "ReconstructedParticle::sel_absPdgId: MC index out of range!");
+    }
+#if edm4hep_VERSION > EDM4HEP_VERSION(0, 10, 5)
+    if (std::abs(mc.at(mc_idx).PDG) == m_type) {
+#else
+    if (std::abs(mc.at(mc_idx).type) == m_type) {
+#endif
+      result.emplace_back(in.at(i));
+    }
+  }
+
+  return result;
+}
+
+ROOT::VecOps::RVec<int> sel_absPdgId::operator() (ROOT::VecOps::RVec<edm4hep::ReconstructedParticleData> in, 
+  ROOT::VecOps::RVec<int> idx,
+  ROOT::VecOps::RVec<edm4hep::MCParticleData> mc,
+  ROOT::VecOps::RVec<int> rp_idx,
+  ROOT::VecOps::RVec<int> rp2mc_idx) {
+  
+  ROOT::VecOps::RVec<int> idx_result;
+  idx_result.reserve(in.size());
+
+  for (size_t i = 0; i < in.size(); ++i) {
+    // int reco_idx = rp_idx.at(i);
+    int reco_idx = rp_idx.at(i);
+    if (rp2mc_idx.at(reco_idx) < 0) continue;
+    auto mc_idx = rp2mc_idx.at(reco_idx);
+    if (mc_idx >= mc.size()) {
+      throw std::out_of_range(
+          "ReconstructedParticle::sel_absPdgId: MC index out of range!");
+    }
+#if edm4hep_VERSION > EDM4HEP_VERSION(0, 10, 5)
+    if (std::abs(mc.at(mc_idx).PDG) == m_type) {
+#else
+    if (std::abs(mc.at(mc_idx).type) == m_type) {
+#endif
+      idx_result.emplace_back(idx.at(i));
+    }
+  }
+  return idx_result;
+}
+
+
+//#######################################################################//
 //                                  sel_pt                               //
 //#######################################################################//
 sel_pt::sel_pt(float arg_min_pt) : m_min_pt(arg_min_pt) {};

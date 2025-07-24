@@ -5,6 +5,254 @@
 
 using namespace AnalysisFCChh;
 
+// make a pair of reco particles
+ROOT::VecOps::RVec<edm4hep::ReconstructedParticleData> AnalysisFCChh::SortLeptonsFromZDecay(ROOT::VecOps::RVec<edm4hep::ReconstructedParticleData> in, ROOT::VecOps::RVec<int> in_indices,
+    ROOT::VecOps::RVec<edm4hep::MCParticleData> all_mc_particles, ROOT::VecOps::RVec<int> rp_indices, ROOT::VecOps::RVec<int> rp2mc_indices) {
+
+  float mZ = 91.1876;
+  // select electrons
+  ROOT::VecOps::RVec<edm4hep::ReconstructedParticleData> electrons = FCCAnalyses::ReconstructedParticle::sel_absPdgId(11)(in, all_mc_particles, rp_indices, rp2mc_indices);
+  // select the electron indices
+  ROOT::VecOps::RVec<int> electron_indices = FCCAnalyses::ReconstructedParticle::sel_absPdgId(11)(in, in_indices, all_mc_particles, rp_indices, rp2mc_indices);
+  // select muons
+  ROOT::VecOps::RVec<edm4hep::ReconstructedParticleData> muons = FCCAnalyses::ReconstructedParticle::sel_absPdgId(13)(in, all_mc_particles, rp_indices, rp2mc_indices);
+  // select the muons indices
+  ROOT::VecOps::RVec<int> muon_indices = FCCAnalyses::ReconstructedParticle::sel_absPdgId(13)(in, in_indices, all_mc_particles, rp_indices, rp2mc_indices);
+  // get electron pairs
+  ROOT::VecOps::RVec<RecoParticleIdxPair> electron_pairs = AnalysisFCChh::getOSPairs(electrons, electron_indices);
+  // get muon pairs
+  ROOT::VecOps::RVec<RecoParticleIdxPair> muon_pairs = AnalysisFCChh::getOSPairs(muons, muon_indices);
+  // merge the pairs
+  ROOT::VecOps::RVec<RecoParticleIdxPair> pairs = AnalysisFCChh::concatenate(electron_pairs, muon_pairs);
+  // here goes the array with the sorted leptons
+  // l1 and l2 = leptons with opposite charge whose mll is closest to Z mass
+  // pT(l1) > pT(l2)
+  // the other leptons are sorted by pT
+  ROOT::VecOps::RVec<edm4hep::ReconstructedParticleData> out;
+  // the best pair of leptons
+  ROOT::VecOps::RVec<edm4hep::ReconstructedParticleData> best_pair;
+  ROOT::VecOps::RVec<int> best_pair_idx;
+  // the best pair of leptons sorted by pT
+  ROOT::VecOps::RVec<edm4hep::ReconstructedParticleData> best_pair_sorted;
+  ROOT::VecOps::RVec<int> best_pair_sorted_idx;
+  // all the other leptons
+  ROOT::VecOps::RVec<edm4hep::ReconstructedParticleData> other_leptons;
+  ROOT::VecOps::RVec<int> other_leptons_idx;
+  // the other leptons sorted by pT
+  ROOT::VecOps::RVec<edm4hep::ReconstructedParticleData> other_leptons_sorted;
+  ROOT::VecOps::RVec<int> other_leptons_sorted_idx;
+
+  // check if any pairs in input:
+  // no electron pairs and no muon pairs
+  if (pairs.size() == 0) {
+    // this menas that there is at most one electron and one muon
+    // and no z->ee or z->mumu candidate
+    // take the input leptons and sort them by pT
+    out = AnalysisFCChh::SortParticleCollection(in);
+    return out;
+  }
+
+  // if only one pair in input
+  // sort the two leptons by pT
+  else if (pairs.size() == 1) {
+    auto pair = pairs.at(0);
+    pair.sort_by_pT();
+    auto lep1 = pair.particle_1;
+    auto lep2 = pair.particle_2;
+    int index_1 = pair.index_1;
+    int index_2 = pair.index_2;
+    out.push_back(lep1);
+    out.push_back(lep2);
+    // check for the other leptons in the input array
+    // there should be at most one (or more than one but with the same sign)
+    for (int i = 0; i < in.size(); i++) {
+      auto lep = in.at(i);
+      int index = in_indices.at(i);
+      // check if the lepton is not in the pair
+      if (index != index_1 && index != index_2) {
+        other_leptons.push_back(lep);
+        other_leptons_idx.push_back(index);
+      }
+    }
+    // sort the other leptons by pT
+    other_leptons_sorted = AnalysisFCChh::SortParticleCollection(other_leptons);
+    // ad the sorted other leptons to the output vector
+    for (int i = 0; i < other_leptons_sorted.size(); i++) {
+      out.push_back(other_leptons_sorted.at(i));
+    }
+    // return the sorted vector
+    return out;
+  }
+
+  // if there are mor options, pick the one that is closest to Z mass
+  const double Z_mass = 91.1876;
+
+  // from Clement's main code: use std::sort on the mass difference
+  auto resonancesort = [&](RecoParticleIdxPair i, RecoParticleIdxPair j) {
+    return (abs(Z_mass - i.merged_TLV().M()) <
+            abs(Z_mass - j.merged_TLV().M()));
+  };
+  std::sort(pairs.begin(), pairs.end(), resonancesort);
+
+  // first one should be the closest one
+  auto lep1 = pairs.at(0).particle_1;
+  auto lep2 = pairs.at(0).particle_2;
+  int index_1 = pairs.at(0).index_1;
+  int index_2 = pairs.at(0).index_2;
+  // add the two leptons to the best_pair vector
+  best_pair.push_back(lep1);
+  best_pair.push_back(lep2);
+  // sort the two leptons by pT
+  best_pair_sorted = AnalysisFCChh::SortParticleCollection(best_pair);
+  // now put the other leptons in the other_electrons vector
+  for (int i = 0; i < in.size(); i++) {
+    auto lep = in.at(i);
+    int index = in_indices.at(i);
+    // check if the lepton is not in the pair
+    if (index != index_1 && index != index_2) {
+      other_leptons.push_back(lep);
+    }
+  }
+  // sort the other leptons by pT
+  other_leptons_sorted = AnalysisFCChh::SortParticleCollection(other_leptons);
+
+  // now put the best pair first in the output vector
+  out.push_back(best_pair_sorted.at(0));
+  out.push_back(best_pair_sorted.at(1));
+  // now put the other leptons in the output vector
+  for (int i = 0; i < other_leptons_sorted.size(); i++) {
+    out.push_back(other_leptons_sorted.at(i));
+  }
+
+  // return the sorted vector
+  return out;  
+}
+
+// write a similar function for keeping track of the indices of the output vector
+ROOT::VecOps::RVec<int> AnalysisFCChh::SortLeptonsIdxFromZDecay(ROOT::VecOps::RVec<edm4hep::ReconstructedParticleData> in, ROOT::VecOps::RVec<int> in_indices,
+  ROOT::VecOps::RVec<edm4hep::MCParticleData> all_mc_particles, ROOT::VecOps::RVec<int> rp_indices, ROOT::VecOps::RVec<int> rp2mc_indices) {
+
+  // select electrons
+  ROOT::VecOps::RVec<edm4hep::ReconstructedParticleData> electrons = FCCAnalyses::ReconstructedParticle::sel_absPdgId(11)(in, all_mc_particles, rp_indices, rp2mc_indices);
+  // select the electron indices
+  ROOT::VecOps::RVec<int> electron_indices = FCCAnalyses::ReconstructedParticle::sel_absPdgId(11)(in, in_indices, all_mc_particles, rp_indices, rp2mc_indices);
+  // select muons
+  ROOT::VecOps::RVec<edm4hep::ReconstructedParticleData> muons = FCCAnalyses::ReconstructedParticle::sel_absPdgId(13)(in, all_mc_particles, rp_indices, rp2mc_indices);
+  // select the muons indices
+  ROOT::VecOps::RVec<int> muon_indices = FCCAnalyses::ReconstructedParticle::sel_absPdgId(13)(in, in_indices, all_mc_particles, rp_indices, rp2mc_indices);
+  // get electron pairs
+  ROOT::VecOps::RVec<RecoParticleIdxPair> electron_pairs = AnalysisFCChh::getOSPairs(electrons, electron_indices);
+  // get muon pairs
+  ROOT::VecOps::RVec<RecoParticleIdxPair> muon_pairs = AnalysisFCChh::getOSPairs(muons, muon_indices);
+  // merge the pairs
+  ROOT::VecOps::RVec<RecoParticleIdxPair> pairs = AnalysisFCChh::concatenate(electron_pairs, muon_pairs);
+  // here goes the array with the sorted electrons indices
+  // l1 and l2 = leptons with opposite charge whose mll is closest to Z mass
+  // pT(l1) > pT(l2)
+  ROOT::VecOps::RVec<int> out;
+
+  // the best pair of leptons
+  ROOT::VecOps::RVec<edm4hep::ReconstructedParticleData> best_pair;
+  ROOT::VecOps::RVec<int> best_pair_idx;
+  // the best pair of leptons sorted by pT
+  ROOT::VecOps::RVec<edm4hep::ReconstructedParticleData> best_pair_sorted;
+  ROOT::VecOps::RVec<int> best_pair_sorted_idx;
+  // all of the other leptons (except for the first pair) and their indices
+  ROOT::VecOps::RVec<edm4hep::ReconstructedParticleData> other_leptons;
+  ROOT::VecOps::RVec<int> other_leptons_idx;
+  // the other leptpns sorted by pT
+  ROOT::VecOps::RVec<int> other_leptons_sorted_idx;
+
+  // check if any pairs in input:
+  // no electron pairs and no muon pairs
+  if (pairs.size() == 0) {
+    // this menas that there is at most one electron and one muon
+    // and no z->ee or z->mumu candidate
+    // take the input leptons and sort them by pT
+    out = AnalysisFCChh::SortParticleCollection(in, in_indices);
+    return out;
+  }
+
+  // if only one pair in input
+  // sort the two leptons by pT
+  else if (pairs.size() == 1) {
+    auto pair = pairs.at(0);
+    pair.sort_by_pT();
+    auto lep1 = pair.particle_1;
+    auto lep2 = pair.particle_2;
+    int index_1 = pair.index_1;
+    int index_2 = pair.index_2;
+    out.push_back(index_1);
+    out.push_back(index_2);
+    // check for the other leptons in the input array
+    // there should be at most one (or more than one but with the same sign)
+    for (int i = 0; i < in.size(); i++) {
+      auto lep = in.at(i);
+      int index = in_indices.at(i);
+      // check if the lepton is not in the pair
+      if (index != index_1 && index != index_2) {
+        other_leptons.push_back(lep);
+        other_leptons_idx.push_back(index);
+      }
+    }
+    // sort the other leptons by pT
+    other_leptons_sorted_idx = AnalysisFCChh::SortParticleCollection(other_leptons, other_leptons_idx);
+    // ad the sorted other leptons indices to the output vector
+    for (int i = 0; i < other_leptons_sorted_idx.size(); i++) {
+      out.push_back(other_leptons_sorted_idx.at(i));
+    }
+    // return the sorted vector
+    return out;
+  }
+
+  // if there are mor options, pick the one that is closest to Z mass
+  const double Z_mass = 91.1876;
+
+  // from Clement's main code: use std::sort on the mass difference
+  auto resonancesort = [&](RecoParticleIdxPair i, RecoParticleIdxPair j) {
+    return (abs(Z_mass - i.merged_TLV().M()) <
+            abs(Z_mass - j.merged_TLV().M()));
+  };
+  std::sort(pairs.begin(), pairs.end(), resonancesort);
+
+  // first one should be the closest one
+  auto lep1 = pairs.at(0).particle_1;
+  auto lep2 = pairs.at(0).particle_2;
+  int index_1 = pairs.at(0).index_1;
+  int index_2 = pairs.at(0).index_2;
+  // add the two leptons to the best_pair vector
+  best_pair.push_back(lep1);
+  best_pair.push_back(lep2);
+  best_pair_idx.push_back(index_1);
+  best_pair_idx.push_back(index_2);
+  // sort the two leptons by pT
+  best_pair_sorted_idx = AnalysisFCChh::SortParticleCollection(best_pair, best_pair_idx);
+  // now put the other leptons in the other_electrons vector
+  for (int i = 0; i < in.size(); i++) {
+    auto lep = in.at(i);
+    int index = in_indices.at(i);
+    // check if the lepton is not in the pair
+    if (index != index_1 && index != index_2) {
+      other_leptons.push_back(lep);
+      other_leptons_idx.push_back(index);
+    }
+  }
+  // sort the other leptons by pT
+  other_leptons_sorted_idx = AnalysisFCChh::SortParticleCollection(other_leptons, other_leptons_idx);
+
+  // now put the best pair first in the output vector
+  out.push_back(best_pair_sorted_idx.at(0));
+  out.push_back(best_pair_sorted_idx.at(1));
+  // now put the other leptons in the output vector
+  for (int i = 0; i < other_leptons_sorted_idx.size(); i++) {
+    out.push_back(other_leptons_sorted_idx.at(i));
+  }
+
+  // return the sorted vector
+  return out;  
+}
+
+
 // truth filter helper functions:
 bool AnalysisFCChh::isStablePhoton(edm4hep::MCParticleData truth_part) {
   auto pdg_id = truth_part.PDG;
@@ -104,7 +352,6 @@ ROOT::VecOps::RVec<int> AnalysisFCChh::GetRecoPhotonIndicesFromHiggs(
       photons_from_higgs_idx.push_back(photons_idx[i]);
     }
   }
-
   return photons_from_higgs_idx;
 }
 
@@ -259,6 +506,37 @@ bool AnalysisFCChh::iss(edm4hep::MCParticleData truth_part) {
     return false;
   }
 }
+
+bool AnalysisFCChh::isd(edm4hep::MCParticleData truth_part) {
+  auto pdg_id = truth_part.PDG;
+  // std::cout << "pdg id of truth part is" << pdg_id << std::endl;
+  if (abs(pdg_id) == 1) {
+    return true;
+  } else {
+    return false;
+  }
+}
+
+bool AnalysisFCChh::isu(edm4hep::MCParticleData truth_part) {
+  auto pdg_id = truth_part.PDG;
+  // std::cout << "pdg id of truth part is" << pdg_id << std::endl;
+  if (abs(pdg_id) == 2) {
+    return true;
+  } else {
+    return false;
+  }
+}
+
+bool AnalysisFCChh::isElectron(edm4hep::MCParticleData truth_part) {
+  auto pdg_id = truth_part.PDG;
+  // std::cout << "pdg id of truth part is" << pdg_id << std::endl;
+  if (abs(pdg_id) == 11) {
+    return true;
+  } else {
+    return false;
+  }
+}
+
 
 bool AnalysisFCChh::isMuon(edm4hep::MCParticleData truth_part) {
   auto pdg_id = truth_part.PDG;
@@ -1445,6 +1723,79 @@ ROOT::VecOps::RVec<RecoParticlePair> AnalysisFCChh::getOSPairs(
   return OS_pairs;
 }
 
+// same but with the new reco particle pair class
+ROOT::VecOps::RVec<RecoParticleIdxPair> AnalysisFCChh::getOSPairs(
+  ROOT::VecOps::RVec<edm4hep::ReconstructedParticleData> leptons_in, 
+  ROOT::VecOps::RVec<int> leptons_in_idx) {
+
+  ROOT::VecOps::RVec<RecoParticleIdxPair> OS_pairs(0);
+
+  // need at least 2 leptons in the input
+  if (leptons_in.size() < 2) {
+    return OS_pairs;
+  }
+
+  // separate the leptons by charges
+  ROOT::VecOps::RVec<edm4hep::ReconstructedParticleData> leptons_pos;
+  ROOT::VecOps::RVec<edm4hep::ReconstructedParticleData> leptons_neg;
+  ROOT::VecOps::RVec<int> leptons_pos_idx;
+  ROOT::VecOps::RVec<int> leptons_neg_idx;
+
+  for (int i = 0; i < leptons_in.size(); ++i) {
+    auto lep = leptons_in.at(i);
+    auto lep_idx = leptons_in_idx.at(i);
+    auto charge = lep.charge;
+    if (charge > 0) {
+      leptons_pos.push_back(lep);
+      leptons_pos_idx.push_back(lep_idx);
+    } else if (charge < 0) {
+      leptons_neg.push_back(lep);
+      leptons_neg_idx.push_back(lep_idx);
+    }
+
+    else {
+      std::cout << "Error in function  AnalysisFCChh::getOSPair() - found "
+                   "neutral particle! Function is supposed to be used for "
+                   "electrons or muons only."
+                << std::endl;
+    }
+  }
+
+  if (leptons_pos.size() < 1 || leptons_neg.size() < 1) {
+    return OS_pairs;
+  } 
+
+  for (int i = 0; i < leptons_pos.size(); ++i) {
+    auto lep_pos = leptons_pos.at(i);
+    auto lep_pos_idx = leptons_pos_idx.at(i);
+
+    for (int j = 0; j < leptons_neg.size(); ++j) {
+      auto lep_neg = leptons_neg.at(j);
+      auto lep_neg_idx = leptons_neg_idx.at(j);
+      // TLorentzVector lep_neg_tlv = getTLV_reco(lep_neg);
+      // TLorentzVector OS_pair_tlv = lep_pos_tlv+lep_neg_tlv;
+
+      // //build a edm4hep rco particle from the os pair:
+      // edm4hep::ReconstructedParticleData OS_pair;
+      // OS_pair.momentum.x = OS_pair_tlv.Px();
+      // OS_pair.momentum.y = OS_pair_tlv.Py();
+      // OS_pair.momentum.z = OS_pair_tlv.Pz();
+      // OS_pair.mass = OS_pair_tlv.M();
+
+      // new code: do not merge the pair but store them separately
+      RecoParticleIdxPair OS_pair;
+      OS_pair.particle_1 = lep_pos;
+      OS_pair.particle_2 = lep_neg;
+      OS_pair.index_1 = lep_pos_idx;
+      OS_pair.index_2 = lep_neg_idx;
+
+      OS_pairs.push_back(OS_pair);
+    }
+  }
+
+  return OS_pairs;
+}
+
 // pick the pair that is closest to Z mass:
 ROOT::VecOps::RVec<RecoParticlePair> AnalysisFCChh::getBestOSPair(
     ROOT::VecOps::RVec<RecoParticlePair> electron_pairs,
@@ -1770,6 +2121,22 @@ ROOT::VecOps::RVec<RecoParticlePair> AnalysisFCChh::getPairs(
 
   return pairs;
 }
+
+ROOT::VecOps::RVec<RecoParticlePair> AnalysisFCChh::getPair(
+    edm4hep::ReconstructedParticleData particle_1,
+    edm4hep::ReconstructedParticleData particle_2) {
+
+  ROOT::VecOps::RVec<RecoParticlePair> pairs;
+
+  // do not sort anything and just take the first two particles
+  RecoParticlePair pair;
+  pair.particle_1 = particle_1;
+  pair.particle_2 = particle_2;
+  pairs.push_back(pair);
+
+  return pairs;
+}
+
 
 // same for MC particle
 ROOT::VecOps::RVec<MCParticlePair> AnalysisFCChh::getPairs(
@@ -2212,6 +2579,54 @@ AnalysisFCChh::get_topness(ROOT::VecOps::RVec<edm4hep::ReconstructedParticleData
         }
       }
       return m_min_ChiWt;
+}
+
+ROOT::VecOps::RVec<int> AnalysisFCChh::get_topness_jets(
+    ROOT::VecOps::RVec<edm4hep::ReconstructedParticleData> jets) {
+
+      ROOT::VecOps::RVec<int> jet_idx;
+      int idx1 = -1;
+      int idx2 = -1;
+      int idx3 = -1;
+      float m_min_ChiWt = -990.0;
+      // Fill in the 4 vectors of the jets
+      std::vector< TLorentzVector > temp_jets;
+
+      for (unsigned int i = 0; i < jets.size(); i++) {
+        temp_jets.push_back(getTLV_reco(jets.at(i)));
+      }
+
+      // If there are < 3 jets (min. # required to define ChiWt) fill out the rest with 0, 0, 0, 0 dummy jets
+      if (jets.size() < 3) {
+        for (unsigned int i = 0; i < 3 - jets.size(); i++) {
+          temp_jets.push_back(TLorentzVector(0, 0, 0, 0));
+        }
+      }
+
+      // Loop over all permutations of jets to calculate ChiWt
+      for (unsigned int i = 0; i < temp_jets.size(); i++) {  //i = bjet index
+        for (unsigned int j = 0; j < temp_jets.size(); j++) {  //j = ljet1 index
+          if (i == j) { continue; }     //indices must be distinct
+
+          for (unsigned int k = 0; k < temp_jets.size(); k++) {    //k = ljet2 index
+            if (i == k || k <= j) { continue; }     //indices must be distinct; require k > j since ljet1 <-> ljet2 in the definition
+
+            float ChiWt = sqrt(pow((temp_jets.at(j) + temp_jets.at(k)).M() / 80000.0 - 1, 2) + pow((temp_jets.at(i) + temp_jets.at(j) + temp_jets.at(k)).M() / 173000.0 - 1, 2));
+
+            if (ChiWt < m_min_ChiWt || m_min_ChiWt < 0) { 
+              m_min_ChiWt = ChiWt;
+              idx1 = i;
+              idx2 = j;
+              idx3 = k;
+            }
+          }
+        }
+      }
+
+      jet_idx.push_back(idx1);
+      jet_idx.push_back(idx2);
+      jet_idx.push_back(idx3);
+      return jet_idx;
 }
 
 // construct ratio of HT2 and HT_w_inv
@@ -2906,6 +3321,112 @@ ROOT::VecOps::RVec<edm4hep::MCParticleData> AnalysisFCChh::get_truth_Z_decay(
 }
 
 // function which finds truth higgs in the MC particles
+ROOT::VecOps::RVec<edm4hep::MCParticleData> AnalysisFCChh::get_final_Zboson(
+  ROOT::VecOps::RVec<edm4hep::MCParticleData> truth_particles,
+  ROOT::VecOps::RVec<podio::ObjectID> daughter_ids) {
+  ROOT::VecOps::RVec<edm4hep::MCParticleData> z_list;
+  // loop over all particles
+  for (auto &truth_part : truth_particles) {
+    // check if particle is a Higgs
+    if (isH(truth_part)) {
+      // check if daughters are Z bosons
+      // if so it means that the Z is not the final Z boson and we skip it
+      bool is_final_z = !(hasChild(truth_part, truth_particles, daughter_ids, 23));
+      // if none of the daughters are Higgs bosons, we add the Higgs to the list
+      if (is_final_z) { 
+        z_list.push_back(truth_part);
+      }
+    } 
+  }
+  return z_list;
+}
+
+
+// check Higgs decay: use to see if can improve stats for single Higgs bkg with
+// exclusive samples
+int AnalysisFCChh::findZDecayChannel(
+  ROOT::VecOps::RVec<edm4hep::MCParticleData> truth_particles,
+  ROOT::VecOps::RVec<podio::ObjectID> daughter_ids) {
+
+int z_decay_type = 0;
+
+for (auto &truth_part : truth_particles) {
+  if (isZ(truth_part)) {
+    // check what children the top has:
+    auto first_child_index = truth_part.daughters_begin;
+    auto last_child_index = truth_part.daughters_end;
+
+    auto children_size = last_child_index - first_child_index;
+
+    // skip intermediate Higgs that just have another Higgs as children
+    if (last_child_index - first_child_index != 2) {
+      continue;
+    }
+
+
+    // get the pdg ids of the children
+    // now get the indices in the daughters vector
+    auto child_1_MC_index = daughter_ids.at(first_child_index).index;
+    auto child_2_MC_index = daughter_ids.at(last_child_index - 1).index;
+
+    // then go back to the original vector of MCParticles
+    auto child_1 = truth_particles.at(child_1_MC_index);
+    auto child_2 = truth_particles.at(child_2_MC_index);
+
+    // Higgs decay types:
+    //  1: Zbb, 2: Zcc, 3: Zdd, 4: Zuu, 5: Zss, 
+    //  6:Zee, 7:Zmumu, 8:Ztautau,
+    //  9:Zvv
+
+    if (isb(child_1) && isb(child_2)) {
+      z_decay_type = 1;
+    }
+
+    else if (isc(child_1) && isc(child_2)) {
+      z_decay_type = 2;
+    }
+
+    else if (isd(child_1) && isd(child_2)) {
+      z_decay_type = 3;
+    }
+
+    else if (isu(child_1) && isu(child_2)) {
+      z_decay_type = 4;
+    }
+
+    else if (iss(child_1) && iss(child_2)) {
+      z_decay_type = 5;
+    }
+
+
+    else if (isElectron(child_1) && isElectron(child_2)) {
+      z_decay_type = 6;
+    }
+
+    else if (isMuon(child_1) && isMuon(child_2)) {
+      z_decay_type = 7;
+    }
+
+    else if (isTau(child_1) && isTau(child_2)) {
+      z_decay_type = 8;
+    }
+
+    else if (isNeutrino(child_1) && isNeutrino(child_2)) {
+      z_decay_type = 9;
+    }
+
+    else {
+      std::cout << "Warning! Found unkown decay of Z boson!" << std::endl;
+      std::cout << "Pdg ids are " << child_1.PDG << " , " << child_2.PDG
+                << std::endl;
+      continue;
+    }
+  }
+}
+  return z_decay_type;
+}
+
+// function which finds truth top in the MC particles
 ROOT::VecOps::RVec<edm4hep::MCParticleData> AnalysisFCChh::get_final_top(
   ROOT::VecOps::RVec<edm4hep::MCParticleData> truth_particles,
   ROOT::VecOps::RVec<podio::ObjectID> daughter_ids) {

@@ -389,6 +389,10 @@ ROOT::VecOps::RVec<float> get_charge(ROOT::VecOps::RVec<edm4hep::MCParticleData>
   return result;
 }
 
+float get_charge(edm4hep::MCParticleData in) {
+  return in.charge;
+}
+
 ROOT::VecOps::RVec<float> get_y(ROOT::VecOps::RVec<edm4hep::MCParticleData> in) {
   ROOT::VecOps::RVec<float> result;
   for (auto & p: in) {

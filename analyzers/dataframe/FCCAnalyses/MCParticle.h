@@ -196,6 +196,7 @@ namespace MCParticle{
 
   /// return the charges of the input MCParticles
   ROOT::VecOps::RVec<float> get_charge(ROOT::VecOps::RVec<edm4hep::MCParticleData> in);
+  float get_charge(edm4hep::MCParticleData in);
 
   /// return the TlorentzVector of the input MCParticles
   ROOT::VecOps::RVec<TLorentzVector> get_tlv(ROOT::VecOps::RVec<edm4hep::MCParticleData> in);
